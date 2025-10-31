@@ -1,156 +1,193 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Renderizador Figuras PowerPoint (Responsivo)</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Renderizador Figuras PowerPoint — Responsivo (Stable Scale)</title>
 <style>
   :root {
-    --base-width: 1280;
-    --base-height: 720;
+    --base-w: 1280;
+    --base-h: 720;
   }
 
-  body {
-    background: #e6e6e6;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
+  /* Centrado de la página */
+  html,body {
+    height: 100%;
     margin: 0;
   }
+  body {
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:#e6e6e6;
+  }
 
+  /* Wrapper mantiene proporción 16:9 y tamaño relativo */
   .canvas-wrapper {
-    position: relative;
-    width: 90vw;                  /* Escala según el ancho de la ventana */
+    width: 95vw;
     max-width: 1280px;
-    aspect-ratio: 16 / 9;         /* Mantiene proporción 1280x720 */
+    aspect-ratio: 16/9;
+    position: relative;
     background: #f9f9f9;
     border: 2px solid #ccc;
-    box-shadow: 0 0 10px rgba(0,0,0,0.15);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.12);
     overflow: hidden;
   }
 
+  /* canvas es el lienzo en tamaño base (1280x720) que será escalado */
   .canvas {
     position: absolute;
-    width: 100%;
-    height: 100%;
-    transform-origin: top left;
+    width: var(--base-w)px;
+    height: var(--base-h)px;
+    left: 0;
+    top: 0;
+    transform-origin: top left; /* scale desde la esquina superior izquierda */
+    will-change: transform;
+    /* No usar width:100% aquí: mantenemos tamaño base y escalamos */
   }
 
+  /* Clase base para todas las figuras (se crean con coordenadas px originales) */
   .figura {
     position: absolute;
     box-sizing: border-box;
-    transform-origin: top left;
+    transform-origin: top left; /* las rotaciones son relativas a top-left del elemento */
   }
 </style>
 </head>
 <body>
-  <div class="canvas-wrapper">
+
+  <div class="canvas-wrapper" id="wrapper">
     <div class="canvas" id="canvas"></div>
   </div>
 
 <script>
-async function cargarFiguras() {
-  const res = await fetch('Figuras_PowerPoint.json');
-  const json = await res.json();
-  const figuras = json.figuras;
-  const canvas = document.getElementById('canvas');
+/*
+  Estrategia:
+  - Leemos JSON (Figuras_PowerPoint.json).
+  - Creamos cada figura dentro del .canvas usando las medidas en px del JSON (sin escalar).
+  - Calculamos un factor de escala: scale = min(wrapperW / baseW, wrapperH / baseH).
+  - Aplicamos transform: scale(scale) al .canvas y posicionamos el canvas escalado centrado dentro del wrapper.
+*/
 
-  // Crear las figuras
-  figuras.forEach(fig => {
-    const tipo = fig.tipo.toLowerCase();
-    const el = document.createElement('div');
-    el.classList.add('figura');
+const BASE_W = 1280;
+const BASE_H = 720;
 
-    const relleno = fig.colorHex || 'transparent';
-    const borde = fig.bordeHex || 'transparent';
-    const ancho = fig.ancho_px;
-    const alto = fig.alto_px;
-    const x = fig.posX_px;
-    const y = fig.posY_px;
-    const rot = fig.rotacion || 0;
+async function cargarYRenderizar() {
+  try {
+    const resp = await fetch('Figuras_PowerPoint.json');
+    if (!resp.ok) throw new Error('No se pudo cargar Figuras_PowerPoint.json');
+    const json = await resp.json();
+    const figuras = Array.isArray(json.figuras) ? json.figuras : [];
+    const canvas = document.getElementById('canvas');
 
-    // Guardar datos originales para escalar después
-    el.dataset.ancho = ancho;
-    el.dataset.alto = alto;
-    el.dataset.x = x;
-    el.dataset.y = y;
-    el.dataset.rot = rot;
-    el.dataset.relleno = relleno;
-    el.dataset.borde = borde;
-    el.dataset.tipo = tipo;
+    // Vaciar canvas por si acaso
+    canvas.innerHTML = '';
 
-    canvas.appendChild(el);
-  });
+    // Crear cada figura con sus coordenadas originales (px)
+    for (const f of figuras) {
+      const tipo = (f.tipo || '').toLowerCase();
+      const el = document.createElement('div');
+      el.className = 'figura';
+      el.dataset.tipo = tipo;
 
-  // Dibujar con escala inicial
-  aplicarEstilosEscalados();
-}
+      // propiedades base
+      const w = Number(f.ancho_px) || 0;
+      const h = Number(f.alto_px) || 0;
+      const x = Number(f.posX_px) || 0;
+      const y = Number(f.posY_px) || 0;
+      const rot = Number(f.rotacion) || 0;
+      const color = f.colorHex || 'transparent';
+      const borde = f.bordeHex || 'transparent';
 
-// Función para aplicar el escalado según el tamaño real del contenedor
-function aplicarEstilosEscalados() {
-  const canvas = document.getElementById('canvas');
-  const wrapper = canvas.parentElement;
-  const escalaX = wrapper.clientWidth / 1280;
-  const escalaY = wrapper.clientHeight / 720;
-  const escala = Math.min(escalaX, escalaY);
+      // Posición y rotación (se aplicará antes de escalar)
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      el.style.transform = `rotate(${rot}deg)`;
+      el.style.transformOrigin = 'top left';
 
-  Array.from(canvas.children).forEach(el => {
-    const tipo = el.dataset.tipo;
-    const ancho = parseFloat(el.dataset.ancho) * escala;
-    const alto = parseFloat(el.dataset.alto) * escala;
-    const x = parseFloat(el.dataset.x) * escala;
-    const y = parseFloat(el.dataset.y) * escala;
-    const rot = parseFloat(el.dataset.rot);
-    const relleno = el.dataset.relleno;
-    const borde = el.dataset.borde;
+      if (tipo.startsWith('rect')) {
+        el.style.width = `${w}px`;
+        el.style.height = `${h}px`;
+        el.style.background = color;
+        if (borde) el.style.border = `2px solid ${borde}`;
+      } else if (tipo.includes('círc') || tipo.includes('circ') || tipo.includes('oval')) {
+        el.style.width = `${w}px`;
+        el.style.height = `${h}px`;
+        el.style.background = color;
+        if (borde) el.style.border = `2px solid ${borde}`;
+        el.style.borderRadius = '50%';
+      } else if (tipo.includes('triáng') || tipo.includes('triang')) {
+        // Triángulo clásico: ancho define base total, alto define altura (antes de rotación)
+        el.style.width = '0px';
+        el.style.height = '0px';
+        el.style.borderLeft = `${w/2}px solid transparent`;
+        el.style.borderRight = `${w/2}px solid transparent`;
+        el.style.borderBottom = `${h}px solid ${color}`;
+        // Si requiere borde externo (stroke) complejo, se necesitaría SVG; omito stroke para simplicidad.
+      } else if (tipo.includes('imagen')) {
+        el.style.width = `${w}px`;
+        el.style.height = `${h}px`;
+        // Si en el JSON existe urlImagen usarla, sino placeholder.
+        const url = f.urlImagen || f.url || 'https://via.placeholder.com/300';
+        el.style.backgroundImage = `url('${url}')`;
+        el.style.backgroundSize = 'cover';
+        el.style.backgroundPosition = 'center';
+        if (borde) el.style.border = `2px solid ${borde}`;
+      } else {
+        // fallback: crear rectángulo con color
+        el.style.width = `${w}px`;
+        el.style.height = `${h}px`;
+        el.style.background = color;
+        if (borde) el.style.border = `2px solid ${borde}`;
+      }
 
-    // Resetear estilos
-    el.style = `
-      position:absolute;
-      left:${x}px;
-      top:${y}px;
-      transform:rotate(${rot}deg);
-      transform-origin:top left;
-      box-sizing:border-box;
-    `;
+      // atributo identificador opcional
+      if (f.nombre) el.id = f.nombre;
 
-    if (tipo.startsWith("rect")) {
-      el.style.width = `${ancho}px`;
-      el.style.height = `${alto}px`;
-      el.style.background = relleno;
-      el.style.border = `2px solid ${borde}`;
-    } 
-    else if (tipo.includes("círc") || tipo.includes("oval")) {
-      el.style.width = `${ancho}px`;
-      el.style.height = `${alto}px`;
-      el.style.background = relleno;
-      el.style.border = `2px solid ${borde}`;
-      el.style.borderRadius = "50%";
-    } 
-    else if (tipo.includes("triáng")) {
-      el.style.width = `0px`;
-      el.style.height = `0px`;
-      el.style.borderLeft = `${(ancho / 2)}px solid transparent`;
-      el.style.borderRight = `${(ancho / 2)}px solid transparent`;
-      el.style.borderBottom = `${alto}px solid ${relleno}`;
-      el.style.background = "transparent";
-    } 
-    else if (tipo.includes("imagen")) {
-      el.style.width = `${ancho}px`;
-      el.style.height = `${alto}px`;
-      el.style.backgroundImage = "url('https://via.placeholder.com/150')";
-      el.style.backgroundSize = "cover";
-      el.style.border = `2px solid ${borde}`;
+      canvas.appendChild(el);
     }
-  });
+
+    // Aplicar escala inicial
+    escalarCanvas();
+
+  } catch (err) {
+    console.error('Error al renderizar figuras:', err);
+  }
 }
 
-// Reescalar al cambiar el tamaño de la ventana
-window.addEventListener('resize', aplicarEstilosEscalados);
+function escalarCanvas() {
+  const wrapper = document.getElementById('wrapper');
+  const canvas = document.getElementById('canvas');
 
-// Iniciar carga
-cargarFiguras();
+  // dimensiones reales disponibles
+  const wrapperW = wrapper.clientWidth;
+  const wrapperH = wrapper.clientHeight;
+
+  // factor de escala uniforme
+  const scale = Math.min(wrapperW / BASE_W, wrapperH / BASE_H);
+
+  // aplicar escala
+  canvas.style.transform = `scale(${scale})`;
+
+  // centrar el canvas escalado (calculamos offset en px para left/top)
+  const scaledW = BASE_W * scale;
+  const scaledH = BASE_H * scale;
+  const offsetX = (wrapperW - scaledW) / 2;
+  const offsetY = (wrapperH - scaledH) / 2;
+
+  canvas.style.left = `${offsetX}px`;
+  canvas.style.top = `${offsetY}px`;
+
+  // (opcional) mejora de pixel-rendering: usar translateZ(0) / will-change
+  canvas.style.willChange = 'transform, left, top';
+}
+
+// recalcular al cambiar tamaño
+window.addEventListener('resize', escalarCanvas);
+window.addEventListener('orientationchange', escalarCanvas);
+
+// iniciar
+cargarYRenderizar();
 </script>
 </body>
 </html>
