@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Renderizador Figuras PowerPoint</title>
+<style>
+  body {
+    background: #e6e6e6;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+  }
+
+  .canvas {
+    position: relative;
+    width: 1280px;
+    height: 720px;
+    background: #f9f9f9;
+    border: 2px solid #ccc;
+    box-shadow: 0 0 10px rgba(0,0,0,0.15);
+  }
+
+  .figura {
+    position: absolute;
+    box-sizing: border-box;
+  }
+</style>
+</head>
+<body>
+  <div class="canvas" id="canvas"></div>
+
+<script>
+// === Cargar el JSON de figuras ===
+fetch('Figuras_PowerPoint.json')
+  .then(res => res.json())
+  .then(json => {
+    const figuras = json.figuras;
+    const canvas = document.getElementById('canvas');
+
+    figuras.forEach(fig => {
+      const tipo = fig.tipo.toLowerCase();
+      const el = document.createElement('div');
+      el.classList.add('figura');
+
+      // Propiedades básicas
+      const relleno = fig.colorHex || 'transparent';
+      const borde = fig.bordeHex || 'transparent';
+      const ancho = fig.ancho_px;
+      const alto = fig.alto_px;
+      const x = fig.posX_px;
+      const y = fig.posY_px;
+      const rot = fig.rotacion || 0;
+
+      // Posición y rotación
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      el.style.transform = `rotate(${rot}deg)`;
+      el.style.transformOrigin = "top left";
+
+      // Según el tipo
+      if (tipo.startsWith("rect")) {
+        el.style.width = `${ancho}px`;
+        el.style.height = `${alto}px`;
+        el.style.background = relleno;
+        el.style.border = `2px solid ${borde}`;
+      } 
+      else if (tipo.includes("círc") || tipo.includes("oval")) {
+        el.style.width = `${ancho}px`;
+        el.style.height = `${alto}px`;
+        el.style.background = relleno;
+        el.style.border = `2px solid ${borde}`;
+        el.style.borderRadius = "50%";
+      } 
+      else if (tipo.includes("triáng")) {
+        el.style.width = 0;
+        el.style.height = 0;
+        el.style.borderLeft = `${ancho/2}px solid transparent`;
+        el.style.borderRight = `${ancho/2}px solid transparent`;
+        el.style.borderBottom = `${alto}px solid ${relleno}`;
+        el.style.background = "transparent";
+      } 
+      else if (tipo.includes("imagen")) {
+        el.style.width = `${ancho}px`;
+        el.style.height = `${alto}px`;
+        el.style.backgroundImage = "url('https://via.placeholder.com/150')";
+        el.style.backgroundSize = "cover";
+        el.style.border = `2px solid ${borde}`;
+      }
+
+      // Añadir al contenedor
+      canvas.appendChild(el);
+    });
+  })
+  .catch(err => console.error("❌ Error al cargar JSON:", err));
+</script>
+</body>
+</html>
